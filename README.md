@@ -1,4 +1,4 @@
-# SEO Topic Cluster Creation: My Journey to Building a Better Keyword Clustering Tool
+# SEO Topic Cluster Creation
 
 This is my process for creating content clusters, topical maps—whatever you want to call them. Ultimately, this is how I plan content.
 
