@@ -75,7 +75,10 @@ def insert_keywords(conn, df_keywords):
     """Insert keywords into the database."""
     try:
         cursor = conn.cursor()
-        records = df_keywords.to_records(index=False)
+        # Ensure 'volume' is numeric and integer
+        df_keywords['volume'] = pd.to_numeric(df_keywords['volume'], errors='coerce').fillna(0).astype(int)
+        # Convert DataFrame to list of tuples
+        records = list(df_keywords[['keyword', 'volume']].itertuples(index=False, name=None))
         cursor.executemany('''
             INSERT INTO keywords (keyword, volume)
             VALUES (?, ?)
@@ -85,6 +88,7 @@ def insert_keywords(conn, df_keywords):
     except sqlite3.Error as e:
         logging.error(f"Error inserting keywords: {e}")
         st.error(f"Error inserting keywords: {e}")
+
 
 def update_intents(conn, intents):
     """Batch update intents in the database."""
@@ -174,6 +178,8 @@ def upload_and_scrape_page():
         try:
             df_keywords = pd.read_csv(uploaded_file)
             if 'keyword' in df_keywords.columns and 'volume' in df_keywords.columns:
+                # Ensure 'volume' is numeric and integer
+                df_keywords['volume'] = pd.to_numeric(df_keywords['volume'], errors='coerce').fillna(0).astype(int)
                 st.success("File uploaded successfully!")
                 st.session_state['df_keywords'] = df_keywords
                 st.dataframe(df_keywords.head())
@@ -400,91 +406,6 @@ def clustering_page():
         st.success("Clustering completed!")
 
 
-# def clustering_page():
-#     st.header("🗂️ Clustering")
-
-#     if 'project_name' not in st.session_state or not st.session_state['project_name']:
-#         st.error("Please go to the Upload & Scrape page first.")
-#         st.stop()
-
-#     project_name = st.session_state['project_name']
-#     db_file = f"{project_name}.db"
-
-#     with st.spinner("Loading SERP data..."):
-#         try:
-#             with create_connection(db_file) as conn:
-#                 if conn:
-#                     cursor = conn.cursor()
-#                     cursor.execute('''
-#                         SELECT k.id, k.keyword, s.url
-#                         FROM keywords k
-#                         INNER JOIN serp_results s ON k.id = s.keyword_id
-#                     ''')
-#                     rows = cursor.fetchall()
-#         except Exception as e:
-#             st.error(f"Error loading SERP data: {e}")
-#             st.stop()
-
-#     if not rows:
-#         st.error("No SERP data found. Please scrape SERPs first.")
-#         st.stop()
-
-#     # Build a mapping from keyword_id to set of URLs
-#     keyword_urls = defaultdict(set)
-#     for row in rows:
-#         keyword_id = row[0]
-#         url = row[2]
-#         keyword_urls[keyword_id].add(url)
-
-#     keyword_ids = list(keyword_urls.keys())
-#     num_keywords = len(keyword_ids)
-
-#     if st.button("Start Clustering"):
-#         progress_bar = st.progress(0)
-#         status_text = st.empty()
-
-#         G = nx.Graph()
-#         G.add_nodes_from(keyword_ids)
-
-#         min_overlaps = st.session_state.get('min_overlaps', 3)
-
-#         with st.spinner("Clustering in progress..."):
-#             try:
-#                 for i in range(num_keywords):
-#                     keyword_id_i = keyword_ids[i]
-#                     urls_i = keyword_urls[keyword_id_i]
-#                     for j in range(i+1, num_keywords):
-#                         keyword_id_j = keyword_ids[j]
-#                         urls_j = keyword_urls[keyword_id_j]
-#                         overlap = len(urls_i.intersection(urls_j))
-#                         if overlap >= min_overlaps:
-#                             G.add_edge(keyword_id_i, keyword_id_j)
-#                     # Update progress bar
-#                     progress = (i + 1) / num_keywords
-#                     progress_bar.progress(progress)
-#                     status_text.text(f"Clustering Progress: {int(progress * 100)}%")
-#             except Exception as e:
-#                 logging.error(f"Error during clustering: {e}")
-#                 st.error(f"Error during clustering: {e}")
-#                 st.stop()
-
-#         # Find connected components
-#         clusters = list(nx.connected_components(G))
-#         logging.info(f"Found {len(clusters)} clusters.")
-
-#         # Assign cluster IDs
-#         cluster_assignments = []
-#         for cluster_id, cluster in enumerate(clusters):
-#             for keyword_id in cluster:
-#                 cluster_assignments.append((cluster_id, keyword_id))
-
-#         # Update cluster IDs in database
-#         with create_connection(db_file) as conn:
-#             if conn:
-#                 update_clusters(conn, cluster_assignments)
-
-#         st.success("Clustering completed!")
-
         # Provide download option
         with create_connection(db_file) as conn:
             cursor = conn.cursor()
@@ -587,8 +508,8 @@ def results_page():
 
     df = pd.DataFrame(rows, columns=['keyword_id', 'keyword', 'volume', 'cluster_id', 'intent'])
 
-    # Handle NaN values in 'volume'
-    df['volume'] = pd.to_numeric(df['volume'], errors='coerce').fillna(0)
+    # Ensure 'volume' is integer
+    df['volume'] = pd.to_numeric(df['volume'], errors='coerce').fillna(0).astype(int)
 
     # Group by clusters
     clusters = df.groupby('cluster_id')
@@ -618,12 +539,14 @@ def results_page():
     # Sort clusters from biggest to smallest based on number of keywords
     cluster_data.sort(key=lambda x: x['num_keywords'], reverse=True)
 
-    # Display clusters
+    # When displaying dataframes, set float_format to avoid decimal points
     for cluster in cluster_data:
         with st.expander(f"🗂️ Cluster {cluster['cluster_id']} - {cluster['cluster_name']} ({cluster['num_keywords']} keywords)"):
             st.write(f"**Cluster Volume:** {cluster['cluster_volume']}")
             st.write(f"**Dominant Intent:** {cluster['dominant_intent']}")
             df_cluster = pd.DataFrame(cluster['keywords'])
+            # Ensure 'volume' is displayed as integer
+            df_cluster['volume'] = df_cluster['volume'].astype(int)
             st.table(df_cluster)
 
     # Download button
@@ -644,144 +567,6 @@ def results_page():
         except Exception as e:
             logging.error(f"Error preparing CSV for download: {e}")
             st.error(f"Error preparing CSV for download: {e}")
-
-
-# def results_page():
-#     st.header("📊 Results")
-
-#     if 'project_name' not in st.session_state or not st.session_state['project_name']:
-#         st.error("Please go to the Upload & Scrape page first.")
-#         st.stop()
-
-#     project_name = st.session_state['project_name']
-#     db_file = f"{project_name}.db"
-
-#     # Intent Classification
-#     if not st.session_state['intent_computed']:
-#         if st.button("Start Intent Classification"):
-#             with st.spinner("Classifying intents..."):
-#                 try:
-#                     with create_connection(db_file) as conn:
-#                         if conn:
-#                             cursor = conn.cursor()
-#                             cursor.execute('''
-#                                 SELECT keywords.id AS keyword_id, serp_results.title
-#                                 FROM keywords
-#                                 LEFT JOIN serp_results ON keywords.id = serp_results.keyword_id
-#                                 GROUP BY keywords.id
-#                             ''')
-#                             rows = cursor.fetchall()
-#                     if not rows:
-#                         st.error("No data available for intent classification.")
-#                         st.stop()
-
-#                     # Initialize classifier with the specified model
-#                     classifier = pipeline("zero-shot-classification", model="facebook/bart-large-mnli", device=device)
-#                     labels = ["informational", "commercial", "navigational"]
-
-#                     intents = []
-#                     total = len(rows)
-#                     progress_bar = st.progress(0)
-#                     status_text = st.empty()
-
-#                     for i, row in enumerate(rows):
-#                         keyword_id, title = row
-#                         text = title if title else "N/A"
-#                         try:
-#                             result = classifier(text, candidate_labels=labels, truncation=True)
-#                             intent = result['labels'][0] if 'labels' in result and result['labels'] else 'unknown'
-#                         except Exception as e:
-#                             logging.error(f"Error classifying intent for keyword_id {keyword_id}: {e}")
-#                             intent = 'unknown'
-#                         intents.append((intent, keyword_id))
-
-#                         # Update progress
-#                         progress = (i + 1) / total
-#                         progress_bar.progress(progress)
-#                         status_text.text(f"Intent Classification Progress: {int(progress * 100)}%")
-
-#                     # Batch update intents
-#                     with create_connection(db_file) as conn:
-#                         if conn:
-#                             update_intents(conn, intents)
-
-#                     st.session_state['intent_computed'] = True
-#                     st.success("Intent classification completed!")
-#                 except Exception as e:
-#                     logging.error(f"Error during intent classification: {e}")
-#                     st.error(f"Error during intent classification: {e}")
-#     else:
-#         st.info("Intent classification already completed.")
-
-#     # Load data from database
-#     with st.spinner("Loading results..."):
-#         try:
-#             with create_connection(db_file) as conn:
-#                 if conn:
-#                     cursor = conn.cursor()
-#                     cursor.execute('''
-#                         SELECT k.id AS keyword_id, k.keyword, k.volume, k.cluster_id, k.intent
-#                         FROM keywords k
-#                     ''')
-#                     rows = cursor.fetchall()
-#         except Exception as e:
-#             st.error(f"Error loading results: {e}")
-#             st.stop()
-
-#     if not rows:
-#         st.error("No data found. Please upload data and scrape SERPs first.")
-#         st.stop()
-
-#     df = pd.DataFrame(rows, columns=['keyword_id', 'keyword', 'volume', 'cluster_id', 'intent'])
-
-#     # Handle NaN values in 'volume'
-#     df['volume'] = pd.to_numeric(df['volume'], errors='coerce').fillna(0)
-
-#     # Group by clusters
-#     clusters = df.groupby('cluster_id')
-#     cluster_data = []
-#     for cluster_id, group in clusters:
-#         group = group.reset_index(drop=True)
-#         if group.empty:
-#             cluster_volume = 0
-#             dominant_intent = 'unknown'
-#             cluster_name = 'No Keywords'
-#             cluster_keywords = []
-#         else:
-#             cluster_volume = group['volume'].sum()
-#             dominant_intent = group['intent'].mode()[0] if not group['intent'].mode().empty else 'unknown'
-#             group = group.sort_values('volume', ascending=False)
-#             cluster_name = group.iloc[0]['keyword']
-#             cluster_keywords = group[['keyword', 'volume', 'intent']].to_dict('records')
-#         cluster_data.append({
-#             'cluster_id': cluster_id,
-#             'cluster_name': cluster_name,
-#             'cluster_volume': cluster_volume,
-#             'dominant_intent': dominant_intent,
-#             'keywords': cluster_keywords
-#         })
-
-#     # Display clusters
-#     for cluster in cluster_data:
-#         with st.expander(f"🗂️ Cluster {cluster['cluster_id']} - {cluster['cluster_name']}"):
-#             st.write(f"**Cluster Volume:** {cluster['cluster_volume']}")
-#             st.write(f"**Dominant Intent:** {cluster['dominant_intent']}")
-#             df_cluster = pd.DataFrame(cluster['keywords'])
-#             st.table(df_cluster)
-
-#     # Download button
-#     if st.button("📥 Download CSV"):
-#         try:
-#             output_df = df.copy()
-#             cluster_mapping = {c['cluster_id']: c['cluster_name'] for c in cluster_data}
-#             intent_mapping = {c['cluster_id']: c['dominant_intent'] for c in cluster_data}
-#             output_df['cluster_name'] = output_df['cluster_id'].map(cluster_mapping)
-#             output_df['dominant_intent'] = output_df['cluster_id'].map(intent_mapping)
-#             csv = output_df[['keyword', 'volume', 'cluster_id', 'cluster_name', 'intent', 'dominant_intent']].to_csv(index=False).encode('utf-8')
-#             st.download_button(label="Download data as CSV", data=csv, file_name='clusters_with_intents.csv', mime='text/csv')
-#         except Exception as e:
-#             logging.error(f"Error preparing CSV for download: {e}")
-#             st.error(f"Error preparing CSV for download: {e}")
 
 if __name__ == "__main__":
     main()
