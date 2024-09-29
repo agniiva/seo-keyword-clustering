@@ -96,6 +96,8 @@ While I won't dive deep into the code here, I used a combination of powerful Pyt
 
 I've made the tool available on GitHub for anyone interested.
 
+[![How to use the tool](https://img.youtube.com/vi/ib8KmRKk7l4/0.jpg)](https://www.youtube.com/watch?v=ib8KmRKk7l4)
+
 ### Requirements
 
 - Python 3.7 or higher
