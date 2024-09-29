@@ -35,6 +35,8 @@ To keep things manageable, I applied a few filters:
 - Long-tail Keyowords
 
 I wasn't too picky at this stage. The goal was to collect a broad dataset to work with.
+<img width="1695" alt="image" src="https://github.com/user-attachments/assets/db5a5113-5c80-40ad-bb26-1f0f3c452429">
+
 
 ### Scraping the SERPs (But Be Careful!)
 
@@ -44,11 +46,18 @@ Instead, I opted for **Serper.dev's API**, which offers a more affordable soluti
 
 *Note: Scraping Google's search results without permission is against their TOS.*
 
+<img width="1702" alt="image" src="https://github.com/user-attachments/assets/7ba7653b-b92b-458e-87cd-af582832bff8">
+
+
 ### Clustering Keywords by URL Overlaps
 
 With the SERP data in hand, I began grouping keywords based on overlapping URLs. If two keywords had several common top-ranking URLs, it indicated that Google considered them closely related.
 
 I utilized an **agglomerative clustering algorithm** for this. It's a hierarchical method that starts by treating each keyword as its own cluster and then merges them based on similarity—in this case, the number of overlapping URLs.
+
+<img width="1685" alt="image" src="https://github.com/user-attachments/assets/355509dd-9004-4ebb-b690-83f6c0a67c92">
+
+
 
 ### Adding Intent Classification
 
